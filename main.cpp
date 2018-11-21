@@ -207,7 +207,6 @@ double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, c
     }else{
         splits = floor(dist);
     }
-    cout << splits << endl;
 
     bool justTurn = false;
     while(splits > 0){
