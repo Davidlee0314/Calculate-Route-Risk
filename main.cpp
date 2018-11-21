@@ -113,13 +113,13 @@ int main()
      * ==================================
      */
 
-//    Point turn1 = Point(3,1);
+//    Point turn1 = Point(0,3);
 //    Point turn2 = Point(0,2);
 //    turnData.push_back(turn1);
 //    turnData.push_back(turn2);
 
     cout << calcRouteRisk(SplitsData, turnData, start, end, circleData) << endl;
-    
+
     /*
      * =====================
      * END INPUT CIRCLE DATA
@@ -207,6 +207,7 @@ double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, c
     }else{
         splits = floor(dist);
     }
+    cout << splits << endl;
 
     bool justTurn = false;
     while(splits > 0){
@@ -222,7 +223,7 @@ double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, c
             splits -= 1;
         }else{
             for(int i = 0; i <= turnData.size(); i++){
-                while(remainDist + progress <= distData[i]){
+                while(remainDist + progress < distData[i]){
                     Point temp;
                     if(justTurn){
                         if(i == turnData.size()){
