@@ -100,21 +100,26 @@ int main()
       * TEST: CALCULATE THE ROUTE RISK
       * ==================================
       */
+
     double x1, y1, x2, y2;
     cin >> x1 >> y1 >> x2 >> y2;
     Point start = Point(x1, y1);
     Point end = Point(x2, y2);
     vector<Point>turnData;
     vector<Point>SplitsData;
+    /*
+     * ==================================
+     * USE FOR TURNS
+     * ==================================
+     */
 
 //    Point turn1 = Point(3,1);
 //    Point turn2 = Point(0,2);
 //    turnData.push_back(turn1);
 //    turnData.push_back(turn2);
-    cout << calcRouteRisk(SplitsData, turnData, start, end, circleData) << endl;
-    for(int i = 0; i < SplitsData.size(); i++)
-        cout << SplitsData[i].x << " " << SplitsData[i].y << " " << SplitsData[i].risk << endl;
 
+    cout << calcRouteRisk(SplitsData, turnData, start, end, circleData) << endl;
+    
     /*
      * =====================
      * END INPUT CIRCLE DATA
@@ -141,7 +146,6 @@ int main()
 //        }
 //        cout << endl;
 //    }
-
     return 0;
 }
 
@@ -166,6 +170,11 @@ double calPointRisk(double x, double y, double riskPointX, double riskPointY, do
     return risk;
 }
 
+/*
+ * SplitsData: contain all the midpoints without a turn, and is ordered with risk
+ * TurnData: a vector that contain the turn points
+ * circleData: contain all the circles
+ */
 double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, const Point& start,
         const Point& end, const vector<Circle>& circleData){
     vector<double> distData;
