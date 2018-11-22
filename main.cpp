@@ -113,12 +113,14 @@ int main()
      * ==================================
      */
 
-//    Point turn1 = Point(0,3);
-//    Point turn2 = Point(0,2);
+//    Point turn1 = Point(2,2);
+//    Point turn2 = Point(3,4);
 //    turnData.push_back(turn1);
 //    turnData.push_back(turn2);
-
     cout << calcRouteRisk(SplitsData, turnData, start, end, circleData) << endl;
+    for(int i = 0;i < SplitsData.size(); i++){
+        cout << SplitsData[i].x << ", " << SplitsData[i].y << ": " << SplitsData[i].risk << endl;
+    }
 
     /*
      * =====================
