@@ -7,7 +7,6 @@ using namespace std;
 double calPointDist(double x1, double y1, double x2, double y2);
 double calPointRisk(double x, double y, double riskPointX, double riskPointY, double power, double range);
 
-
 class Point
 {
     friend ostream& operator<<(ostream& out, const Point& pt);
@@ -25,8 +24,6 @@ double Point::distToPoint(const Point& aPoint)
 {
     return calPointDist(aPoint.x, aPoint.y, x, y);
 }
-
-
 
 class Circle
 {
@@ -47,7 +44,12 @@ double Circle::givePointRisk(const Point &aPoint) const
     return calPointRisk(aPoint.x, aPoint.y, x, y, power, range);
 }
 
-double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, const Point& start, const Point& end, const vector<Circle> &circleData);
+double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, const Point& start,
+                     const Point& end, const vector<Circle> &circleData);
+Point findNextPoint(const Point& start, const Point& end, Point nowPt, vector<Point>* map, double distLim, int n);
+void cinMap(const vector<Circle>& circleData, vector<Point>* map, int n);
+
+
 
 int main()
 {
@@ -56,9 +58,9 @@ int main()
     int n = 0, m = 0, weight = 0, distLim = 0;
     cin >> n >> m >> weight >> distLim;
 
-    vector<Point> map[n];
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
+    vector<Point>* map = new vector<Point>[n + 1];
+    for (int i = 0; i <= n; ++i) {
+        for (int j = 0; j <= n; ++j) {
             map[i].emplace_back(Point(i, j));
         }
     }
@@ -73,7 +75,6 @@ int main()
     vector<int> rangeData;
     vector<int> powerData;
     vector<Circle> circleData;
-
     int temp = 0;
     for (int i = 0; i < m; ++i) {
         cin >> temp;
@@ -94,19 +95,20 @@ int main()
     for (int i = 0; i < m; ++i) {
         circleData.emplace_back(Circle(xData[i], yData[i], rangeData[i], powerData[i]));
     }
+    cinMap(circleData, map, n);
 
-    /*
-      * ==================================
-      * TEST: CALCULATE THE ROUTE RISK
-      * ==================================
-      */
+/*
+  * ==================================
+  * TEST: CALCULATE THE ROUTE RISK
+  * ==================================
+  */
 
     double x1, y1, x2, y2;
     cin >> x1 >> y1 >> x2 >> y2;
     Point start = Point(x1, y1);
     Point end = Point(x2, y2);
     vector<Point>turnData;
-    vector<Point>SplitsData;
+    vector<Point>splitsData;
     /*
      * ==================================
      * USE FOR TURNS
@@ -117,10 +119,10 @@ int main()
 //    Point turn2 = Point(3,4);
 //    turnData.push_back(turn1);
 //    turnData.push_back(turn2);
-    cout << calcRouteRisk(SplitsData, turnData, start, end, circleData) << endl;
-    for(int i = 0;i < SplitsData.size(); i++){
-        cout << SplitsData[i].x << ", " << SplitsData[i].y << ": " << SplitsData[i].risk << endl;
-    }
+    calcRouteRisk(splitsData, turnData, start, end, circleData);
+//    for(int i = 0;i < splitsData.size(); i++){
+//        cout << splitsData[i].x << ", " << splitsData[i].y << ": " << splitsData[i].risk << endl;
+//    }
 
     /*
      * =====================
@@ -129,11 +131,13 @@ int main()
      */
     /*
      * ============================
-     * DRAW CIRCLE RISK DATA ON MAP
+     * * DRAW CIRCLE RISK DATA ON MAP
      * ============================
      */
-
-
+    Point tempPoint = Point(floor(splitsData.back().x), floor(splitsData.back().y));
+    tempPoint.risk = map[static_cast<int>(floor(splitsData.back().x))][static_cast<int>(floor(splitsData.back().y))].risk;
+    Point ans = findNextPoint(start, end, tempPoint, map, distLim, n);
+    cout << ans.x << " " << ans.y;
 
     /*
      * =================
@@ -151,13 +155,28 @@ int main()
     return 0;
 }
 
-
-
 ostream& operator<<(ostream& out, const Point& pt)
 {
     out << pt.risk;
     return out;
 }
+
+void cinMap(const vector<Circle>& circleData, vector<Point>* map, int n){
+    for(int i = 0; i < circleData.size(); i++){
+        Point start = Point(circleData[i].x - circleData[i].range, circleData[i].y - circleData[i].range);
+        for(int j = 0; j < 2 * circleData[i].range; j++){
+            for(int k = 0; k < 2 * circleData[i].range; k++){
+                Point now = Point(start.x + k, start.y + j);
+                if(now.x < 0 || now.x > n || now.y < 0 || now.y > n){
+                    continue;
+                }else{
+                    map[static_cast<int>(now.x)][static_cast<int>(now.y)].risk += circleData[i].givePointRisk(now);
+                }
+            }
+        }
+    }
+}
+
 double calPointDist(double x1, double y1, double x2, double y2)
 {
     double ans = pow(pow(x1 - x2, 2) + pow(y1 - y2, 2), 0.5);
@@ -178,7 +197,7 @@ double calPointRisk(double x, double y, double riskPointX, double riskPointY, do
  * circleData: contain all the circles
  */
 double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, const Point& start,
-        const Point& end, const vector<Circle>& circleData){
+                     const Point& end, const vector<Circle>& circleData){
     vector<double> distData;
 
     double distTemp = 0;
@@ -214,7 +233,7 @@ double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, c
     while(splits > 0){
         if(turnData.empty()){
             Point temp = Point(start.x + progress * (end.x - start.x) / dist,
-                    start.y + progress * (end.y - start.y) / dist);
+                               start.y + progress * (end.y - start.y) / dist);
             for(int i = 0; i < circleData.size(); i++){
                 temp.risk += circleData[i].givePointRisk(temp);
             }
@@ -265,4 +284,40 @@ double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, c
     stable_sort(splitsData.begin(), splitsData.end(),[]
             (const Point& a, const Point& b) -> bool{return a.risk < b.risk;});
     return totalRisk;
+}
+
+Point findNextPoint(const Point& start, const Point& end, Point nowPt, vector<Point>* map, double distLim, int n)
+{
+    Point bestPoint(nowPt);
+    bestPoint.risk = nowPt.risk;
+
+    double xFrom = nowPt.x - 1, yFrom = nowPt.y - 1;
+    for (int i = (int)xFrom; i < xFrom + 1; ++i) {
+        if (i < 0){
+            i = 0;
+        } else if (i > n){
+            i = n;
+        }
+        for (int j = (int)yFrom; j < yFrom + 1; ++j) {
+            if (j < 0){
+                j = 0;
+            } else if (j > n){
+                j = n;
+            }
+
+            // judge
+            if (map[i][j].risk < bestPoint.risk and
+                calPointDist(start.x, start.y, i, j) + calPointDist(i, j, end.x, end.y) <= distLim){
+                bestPoint = Point(i, j);
+                bestPoint.risk = map[i][j].risk;
+            }
+        }
+    }
+    cout<< "("<<bestPoint.x << bestPoint.y <<") : " << bestPoint.risk << endl;
+
+    if (bestPoint.x == nowPt.x and bestPoint.y == nowPt.y){
+        return bestPoint;
+    }else{
+        return findNextPoint(start, end, bestPoint, map, distLim, n);
+    }
 }
