@@ -134,8 +134,8 @@ int main()
      * * DRAW CIRCLE RISK DATA ON MAP
      * ============================
      */
-    Point tempPoint = Point(floor(splitsData.back().x), floor(splitsData.back().y));
-    tempPoint.risk = map[static_cast<int>(floor(splitsData.back().x))][static_cast<int>(floor(splitsData.back().y))].risk;
+    Point tempPoint = Point(splitsData.back().x, splitsData.back().y);
+    tempPoint.risk = splitsData.back().risk;
     Point ans = findNextPoint(start, end, tempPoint, map, distLim, n);
     cout << ans.x << " " << ans.y;
 
@@ -291,29 +291,40 @@ Point findNextPoint(const Point& start, const Point& end, Point nowPt, vector<Po
     Point bestPoint(nowPt);
     bestPoint.risk = nowPt.risk;
 
-    double xFrom = nowPt.x - 1, yFrom = nowPt.y - 1;
-    for (int i = (int)xFrom; i < xFrom + 1; ++i) {
+    double xFrom, xTo, yFrom, yTo;
+    if(nowPt.x - floor(nowPt.x) == 0 && nowPt.y - floor(nowPt.y) == 0 ){
+        xFrom = nowPt.x - 1;
+        yFrom = nowPt.y - 1;
+        xTo = nowPt.x + 1;
+        yTo = nowPt.y + 1;
+    }else{
+        xFrom = floor(nowPt.x);
+        yFrom = floor(nowPt.y);
+        xTo = ceil(nowPt.x);
+        yTo = ceil(nowPt.y);
+    }
+    for(int i = (int)xFrom; i <= (int)xTo; i++){
         if (i < 0){
             i = 0;
         } else if (i > n){
             i = n;
         }
-        for (int j = (int)yFrom; j < yFrom + 1; ++j) {
+        for(int j = (int)yFrom; j <= (int)yTo; j++){
             if (j < 0){
                 j = 0;
             } else if (j > n){
                 j = n;
             }
-
             // judge
-            if (map[i][j].risk < bestPoint.risk and
-                calPointDist(start.x, start.y, i, j) + calPointDist(i, j, end.x, end.y) <= distLim){
+            if (map[i][j].risk < bestPoint.risk &&
+                calPointDist(start.x, start.y, i, j) + calPointDist(i, j, end.x, end.y) <= distLim &&
+                i - start.x / j - start.y != end.x - i / end.y - j){
                 bestPoint = Point(i, j);
                 bestPoint.risk = map[i][j].risk;
             }
         }
     }
-    cout<< "("<<bestPoint.x << bestPoint.y <<") : " << bestPoint.risk << endl;
+    cout<< "("<<bestPoint.x <<", " << bestPoint.y <<") : " << bestPoint.risk << endl;
 
     if (bestPoint.x == nowPt.x and bestPoint.y == nowPt.y){
         return bestPoint;
