@@ -14,12 +14,13 @@ public:
     double x;
     double y;
     double risk;
+    bool find;
     Point();
     Point(double x, double y);
     double distToPoint(const Point& aPoint);
 };
-Point::Point() : x(0), y(0), risk(0) {}
-Point::Point(double x, double y) : x(x), y(y), risk(0) {}
+Point::Point() : x(0), y(0), risk(0), find(false){}
+Point::Point(double x, double y) : x(x), y(y), risk(0), find(false){}
 double Point::distToPoint(const Point& aPoint)
 {
     return calPointDist(aPoint.x, aPoint.y, x, y);
@@ -44,10 +45,12 @@ double Circle::givePointRisk(const Point &aPoint) const
     return calPointRisk(aPoint.x, aPoint.y, x, y, power, range);
 }
 
-double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, const Point& start,
+double noTurnRouteRisk(vector<Point>& splitsData, const Point& start,
+                       const Point& end, const vector<Circle>& circleData);
+double turnRouteRisk(const vector<Point>& turnData, const Point& start,
                      const Point& end, const vector<Circle> &circleData);
-Point findNextPoint(const Point& start, const Point& end, Point nowPt, vector<Point>* map, double distLim, int n);
-void cinMap(const vector<Circle>& circleData, vector<Point>* map, int n);
+Point findNextPoint(bool map[][1000] , const Point& start, const Point& end, Point nowPt, double distLim,
+                    int ratio, int n, const vector<Circle>& circleData);
 
 
 
@@ -58,13 +61,7 @@ int main()
     int n = 0, m = 0, weight = 0, distLim = 0;
     cin >> n >> m >> weight >> distLim;
 
-    vector<Point>* map = new vector<Point>[n + 1];
-    for (int i = 0; i <= n; ++i) {
-        for (int j = 0; j <= n; ++j) {
-            map[i].emplace_back(Point(i, j));
-        }
-    }
-
+    bool map[1000][1000] = {false};
     /*
      * ==================================
      * DOWN BELOW : FOR INPUT CIRCLE DATA
@@ -95,14 +92,11 @@ int main()
     for (int i = 0; i < m; ++i) {
         circleData.emplace_back(Circle(xData[i], yData[i], rangeData[i], powerData[i]));
     }
-    cinMap(circleData, map, n);
-
 /*
   * ==================================
   * TEST: CALCULATE THE ROUTE RISK
   * ==================================
   */
-
     double x1, y1, x2, y2;
     cin >> x1 >> y1 >> x2 >> y2;
     Point start = Point(x1, y1);
@@ -114,16 +108,13 @@ int main()
      * USE FOR TURNS
      * ==================================
      */
-
-//    Point turn1 = Point(2,2);
-//    Point turn2 = Point(3,4);
-//    turnData.push_back(turn1);
-//    turnData.push_back(turn2);
-    calcRouteRisk(splitsData, turnData, start, end, circleData);
-//    for(int i = 0;i < splitsData.size(); i++){
-//        cout << splitsData[i].x << ", " << splitsData[i].y << ": " << splitsData[i].risk << endl;
-//    }
-
+    int ratio;
+    if(n / 50 < 1){
+        ratio = 1;
+    }else{
+        ratio = n / 50;
+    }
+    noTurnRouteRisk(splitsData, start, end, circleData);
     /*
      * =====================
      * END INPUT CIRCLE DATA
@@ -134,10 +125,9 @@ int main()
      * * DRAW CIRCLE RISK DATA ON MAP
      * ============================
      */
-    Point tempPoint = Point(splitsData.back().x, splitsData.back().y);
-    tempPoint.risk = splitsData.back().risk;
-    Point ans = findNextPoint(start, end, tempPoint, map, distLim, n);
-    cout << ans.x << " " << ans.y;
+    Point tempPoint = Point(floor(splitsData.back().x), floor(splitsData.back().y));
+    Point ans = findNextPoint(map, start, end, tempPoint, distLim, ratio, n, circleData);
+    cout <<"1 " << ans.x << " " << ans.y;
 
     /*
      * =================
@@ -146,12 +136,6 @@ int main()
      *    with risks
      * =================
      */
-//    for (int i = 0; i < n; ++i) {
-//        for (int j = 0; j < n; ++j) {
-//            cout << map[i][j] << " ";
-//        }
-//        cout << endl;
-//    }
     return 0;
 }
 
@@ -159,22 +143,6 @@ ostream& operator<<(ostream& out, const Point& pt)
 {
     out << pt.risk;
     return out;
-}
-
-void cinMap(const vector<Circle>& circleData, vector<Point>* map, int n){
-    for(int i = 0; i < circleData.size(); i++){
-        Point start = Point(circleData[i].x - circleData[i].range, circleData[i].y - circleData[i].range);
-        for(int j = 0; j < 2 * circleData[i].range; j++){
-            for(int k = 0; k < 2 * circleData[i].range; k++){
-                Point now = Point(start.x + k, start.y + j);
-                if(now.x < 0 || now.x > n || now.y < 0 || now.y > n){
-                    continue;
-                }else{
-                    map[static_cast<int>(now.x)][static_cast<int>(now.y)].risk += circleData[i].givePointRisk(now);
-                }
-            }
-        }
-    }
 }
 
 double calPointDist(double x1, double y1, double x2, double y2)
@@ -196,30 +164,54 @@ double calPointRisk(double x, double y, double riskPointX, double riskPointY, do
  * TurnData: a vector that contain the turn points
  * circleData: contain all the circles
  */
-double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, const Point& start,
+double noTurnRouteRisk(vector<Point>& splitsData, const Point& start,
+                       const Point& end, const vector<Circle>& circleData){
+    double dist = calPointDist(start.x, start.y, end.x, end.y);
+    double splits = 0, totalRisk = 0;
+    int progress = 1;
+
+    if(dist - floor(dist) == 0){
+        splits = floor(dist) - 1;
+    }else{
+        splits = floor(dist);
+    }
+
+    while(splits > 0){
+        Point temp = Point(start.x + progress * (end.x - start.x) / dist,
+                           start.y + progress * (end.y - start.y) / dist);
+        for(int i = 0; i < circleData.size(); i++){
+            temp.risk += circleData[i].givePointRisk(temp);
+        }
+        splitsData.emplace_back(temp);
+        totalRisk += temp.risk;
+        progress += 1;
+        splits -= 1;
+        stable_sort(splitsData.begin(), splitsData.end(),[]
+                (const Point& a, const Point& b) -> bool{return a.risk < b.risk;});
+    }
+    return totalRisk;
+}
+
+double turnRouteRisk(const vector<Point>& turnData, const Point& start,
                      const Point& end, const vector<Circle>& circleData){
     vector<double> distData;
-
     double distTemp = 0;
-    if(turnData.empty()){
-        distTemp = calPointDist(start.x, start.y, end.x, end.y);
-        distData.push_back(distTemp);
-    }else{
-        for(int i = 0; i <= turnData.size(); i++){
-            if(i == 0){
-                distTemp = calPointDist(start.x, start.y, turnData[i].x, turnData[i].y);
-            }else if(i == turnData.size()){
-                distTemp = calPointDist(end.x, end.y, turnData[i - 1].x, turnData[i - 1].y);
-            }else{
-                distTemp = calPointDist(turnData[i - 1].x, turnData[i - 1].y, turnData[i].x, turnData[i].y);
-            }
-            distData.push_back(distTemp);
+    for(int i = 0; i <= turnData.size(); i++){
+        if(i == 0){
+            distTemp = calPointDist(start.x, start.y, turnData[i].x, turnData[i].y);
+        }else if(i == turnData.size()){
+            distTemp = calPointDist(end.x, end.y, turnData[i - 1].x, turnData[i - 1].y);
+        }else{
+            distTemp = calPointDist(turnData[i - 1].x, turnData[i - 1].y, turnData[i].x, turnData[i].y);
         }
+        distData.push_back(distTemp);
     }
 
     double dist = 0, splits = 0, totalRisk = 0, remainDist = 0;
     double tempx = 0, tempy = 0;
     int progress = 1;
+    bool justTurn = false;
+
     for(int i = 0; i < distData.size(); i++){
         dist += distData[i];
     }
@@ -229,106 +221,102 @@ double calcRouteRisk(vector<Point>& splitsData, const vector<Point>& turnData, c
         splits = floor(dist);
     }
 
-    bool justTurn = false;
     while(splits > 0){
-        if(turnData.empty()){
-            Point temp = Point(start.x + progress * (end.x - start.x) / dist,
-                               start.y + progress * (end.y - start.y) / dist);
-            for(int i = 0; i < circleData.size(); i++){
-                temp.risk += circleData[i].givePointRisk(temp);
-            }
-            splitsData.emplace_back(temp);
-            totalRisk += temp.risk;
-            progress += 1;
-            splits -= 1;
-        }else{
-            for(int i = 0; i <= turnData.size(); i++){
-                while(remainDist + progress < distData[i]){
-                    Point temp;
-                    if(justTurn){
-                        if(i == turnData.size()){
-                            temp = Point(turnData[i - 1].x + (end.x - turnData[i - 1].x) * remainDist / distData[i],
-                                         turnData[i - 1].y + (end.y - turnData[i - 1].y) * remainDist / distData[i]);
-                        }else{
-                            temp = Point(turnData[i - 1].x + (turnData[i].x - turnData[i - 1].x) * remainDist / distData[i],
-                                         turnData[i - 1].y + (turnData[i].y - turnData[i - 1].y) * remainDist / distData[i]);
-                        }
-                        tempx = temp.x;
-                        tempy = temp.y;
-                        justTurn = false;
+        for(int i = 0; i <= turnData.size(); i++){
+            while(remainDist + progress < distData[i]){
+                Point temp;
+                if(justTurn){
+                    if(i == turnData.size()){
+                        temp = Point(turnData[i - 1].x + (end.x - turnData[i - 1].x) * remainDist / distData[i],
+                                     turnData[i - 1].y + (end.y - turnData[i - 1].y) * remainDist / distData[i]);
                     }else{
-                        if(i == 0){
-                            temp = Point(start.x + progress * (turnData[i].x - start.x) / distData[i],
-                                         start.y + progress * (turnData[i].y - start.y) / distData[i]);
-                        }else if(i == turnData.size()){
-                            temp = Point(tempx + progress * (end.x - turnData[i - 1].x) / distData[i],
-                                         tempy + progress * (end.y - turnData[i - 1].y) / distData[i]);
-                        }else{
-                            temp = Point(tempx + progress * (turnData[i].x - turnData[i - 1].x) / distData[i],
-                                         tempy + progress * (turnData[i].y - turnData[i - 1].y) / distData[i]);
-                        }
-                        progress += 1;
+                        temp = Point(turnData[i - 1].x + (turnData[i].x - turnData[i - 1].x) * remainDist / distData[i],
+                                     turnData[i - 1].y + (turnData[i].y - turnData[i - 1].y) * remainDist / distData[i]);
                     }
-                    for(int i = 0; i < circleData.size(); i++){
-                        temp.risk += circleData[i].givePointRisk(temp);
+                    tempx = temp.x;
+                    tempy = temp.y;
+                    justTurn = false;
+                }else{
+                    if(i == 0){
+                        temp = Point(start.x + progress * (turnData[i].x - start.x) / distData[i],
+                                     start.y + progress * (turnData[i].y - start.y) / distData[i]);
+                    }else if(i == turnData.size()){
+                        temp = Point(tempx + progress * (end.x - turnData[i - 1].x) / distData[i],
+                                     tempy + progress * (end.y - turnData[i - 1].y) / distData[i]);
+                    }else{
+                        temp = Point(tempx + progress * (turnData[i].x - turnData[i - 1].x) / distData[i],
+                                     tempy + progress * (turnData[i].y - turnData[i - 1].y) / distData[i]);
                     }
-                    totalRisk += temp.risk;
-                    splits -= 1;
+                    progress += 1;
                 }
-                remainDist = progress + remainDist - distData[i];
-                progress = 1;
-                justTurn = true;
+                for(int j = 0; j < circleData.size(); j++){
+                    temp.risk += circleData[j].givePointRisk(temp);
+                }
+                totalRisk += temp.risk;
+                splits -= 1;
             }
+            remainDist = progress + remainDist - distData[i];
+            progress = 1;
+            justTurn = true;
         }
     }
-    stable_sort(splitsData.begin(), splitsData.end(),[]
-            (const Point& a, const Point& b) -> bool{return a.risk < b.risk;});
     return totalRisk;
 }
 
-Point findNextPoint(const Point& start, const Point& end, Point nowPt, vector<Point>* map, double distLim, int n)
+Point findNextPoint(bool map[][1000] , const Point& start, const Point& end, Point nowPt,
+                    double distLim,int ratio, int n, const vector<Circle> &circleData)
 {
     Point bestPoint(nowPt);
-    bestPoint.risk = nowPt.risk;
+    vector<Point>targetData;
+    targetData.emplace_back(bestPoint);
+    vector<Point>turnData;
 
     double xFrom, xTo, yFrom, yTo;
-    if(nowPt.x - floor(nowPt.x) == 0 && nowPt.y - floor(nowPt.y) == 0 ){
-        xFrom = nowPt.x - 1;
-        yFrom = nowPt.y - 1;
-        xTo = nowPt.x + 1;
-        yTo = nowPt.y + 1;
+    if(nowPt.x - floor(nowPt.x) == 0 && nowPt.y - floor(nowPt.y) == 0){
+        xFrom = static_cast<int>(nowPt.x / ratio) * ratio;
+        yFrom = static_cast<int>(nowPt.x / ratio) * ratio;
+        xTo = xFrom + ratio;
+        yTo = yFrom + ratio;
     }else{
-        xFrom = floor(nowPt.x);
-        yFrom = floor(nowPt.y);
-        xTo = ceil(nowPt.x);
-        yTo = ceil(nowPt.y);
+        xFrom = static_cast<int>(nowPt.x / ratio) * ratio - ratio;
+        yFrom = static_cast<int>(nowPt.x / ratio) * ratio - ratio;
+        xTo = xFrom + 2 * ratio;
+        yTo = yFrom + 2 * ratio;
     }
-    for(int i = (int)xFrom; i <= (int)xTo; i++){
+    for(int i = (int)xFrom; i <= (int)xTo; i += ratio){
+        int tempx = 0, tempy = 0;
         if (i < 0){
-            i = 0;
+            tempx = 0;
         } else if (i > n){
-            i = n;
+            tempx = n;
+        }else{
+            tempx = i;
         }
-        for(int j = (int)yFrom; j <= (int)yTo; j++){
+        for(int j = (int)yFrom; j <= (int)yTo; j += ratio){
             if (j < 0){
-                j = 0;
+                tempy = 0;
             } else if (j > n){
-                j = n;
+                tempy = n;
+            }else{
+                tempy = j;
             }
-            // judge
-            if (map[i][j].risk < bestPoint.risk &&
-                calPointDist(start.x, start.y, i, j) + calPointDist(i, j, end.x, end.y) <= distLim &&
-                i - start.x / j - start.y != end.x - i / end.y - j){
-                bestPoint = Point(i, j);
-                bestPoint.risk = map[i][j].risk;
+            if(!map[tempx][tempy]){
+                map[tempx][tempy] = true;
+                turnData.clear();
+                turnData.emplace_back(Point(tempx, tempy));
+                double risk = turnRouteRisk(turnData, start, end, circleData);
+                // judge
+                if (risk < turnRouteRisk(targetData, start, end, circleData) &&
+                    calPointDist(start.x, start.y, tempx, tempy) + calPointDist(tempx, tempy, end.x, end.y) <= distLim &&
+                    tempx - start.x / tempy - start.y != end.x - tempx / end.y - tempy){
+                    bestPoint = Point(tempx, tempy);
+                }
             }
         }
     }
-    cout<< "("<<bestPoint.x <<", " << bestPoint.y <<") : " << bestPoint.risk << endl;
-
-    if (bestPoint.x == nowPt.x and bestPoint.y == nowPt.y){
+    if(bestPoint.x == nowPt.x && bestPoint.y == nowPt.y){
         return bestPoint;
     }else{
-        return findNextPoint(start, end, bestPoint, map, distLim, n);
+        return findNextPoint(map, start, end, bestPoint, distLim, ratio, n, circleData);
     }
 }
