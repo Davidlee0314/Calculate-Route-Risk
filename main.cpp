@@ -7,25 +7,6 @@ using namespace std;
 double calPointDist(double x1, double y1, double x2, double y2);
 double calPointRisk(double x, double y, double riskPointX, double riskPointY, double power, double range);
 
-class Point
-{
-    friend ostream& operator<<(ostream& out, const Point& pt);
-public:
-    double x;
-    double y;
-    double risk;
-    bool find;
-    Point();
-    Point(double x, double y);
-    double distToPoint(const Point& aPoint);
-};
-Point::Point() : x(0), y(0), risk(0), find(false){}
-Point::Point(double x, double y) : x(x), y(y), risk(0), find(false){}
-double Point::distToPoint(const Point& aPoint)
-{
-    return calPointDist(aPoint.x, aPoint.y, x, y);
-}
-
 class Circle
 {
 public:
@@ -35,38 +16,39 @@ public:
     double power;
     Circle();
     Circle(double x, double y, double range, double power);
-    double givePointRisk(const Point& aPoint) const;
 };
 Circle::Circle() : x(0), y(0), range(0), power(0) {}
 Circle::Circle(double x, double y, double range, double power)
         : x(x), y(y), range(range), power(power) {}
-double Circle::givePointRisk(const Point &aPoint) const
+
+class Point
 {
-    return calPointRisk(aPoint.x, aPoint.y, x, y, power, range);
+public:
+    double x;
+    double y;
+    double risk;
+    double distStart;
+    Point();
+    Point(double x, double y);
+    double distToPoint(const Point& aPoint);
+};
+Point::Point() : x(0), y(0), risk(0), distStart(0){}
+Point::Point(double x, double y) : x(x), y(y), risk(0), distStart(0){}
+double Point::distToPoint(const Point& aPoint)
+{
+    return calPointDist(aPoint.x, aPoint.y, x, y);
 }
 
 double noTurnRouteRisk(vector<Point>& splitsData, const Point& start,
                        const Point& end, const vector<Circle>& circleData);
 double turnRouteRisk(const vector<Point>& turnData, const Point& start,
                      const Point& end, const vector<Circle> &circleData);
-Point findNextPoint(bool map[][1000] , const Point& start, const Point& end, Point nowPt, double distLim,
-                    int ratio, int n, const vector<Circle>& circleData);
+void twoCircleSpots(vector<Point>& nodes, const Circle& c1, const Circle& c2, int n);
 
-
-
-int main()
-{
-    int numOfTurns = 1;// for answer
-
+int main() {
     int n = 0, m = 0, weight = 0, distLim = 0;
     cin >> n >> m >> weight >> distLim;
 
-    bool map[1000][1000] = {false};
-    /*
-     * ==================================
-     * DOWN BELOW : FOR INPUT CIRCLE DATA
-     * ==================================
-     */
     vector<int> xData;
     vector<int> yData;
     vector<int> rangeData;
@@ -92,58 +74,28 @@ int main()
     for (int i = 0; i < m; ++i) {
         circleData.emplace_back(Circle(xData[i], yData[i], rangeData[i], powerData[i]));
     }
-/*
-  * ==================================
-  * TEST: CALCULATE THE ROUTE RISK
-  * ==================================
-  */
+
     double x1, y1, x2, y2;
     cin >> x1 >> y1 >> x2 >> y2;
     Point start = Point(x1, y1);
     Point end = Point(x2, y2);
-    vector<Point>turnData;
-    vector<Point>splitsData;
-    /*
-     * ==================================
-     * USE FOR TURNS
-     * ==================================
-     */
-    int ratio;
-    if(n / 50 < 1){
-        ratio = 1;
-    }else{
-        ratio = n / 50;
+
+    vector<Point> nodes;
+    nodes.push_back(start);
+    nodes.push_back(end);
+    vector<Point> routes;
+    for(int i = 0; i < circleData.size(); i++){
+        for(int j = i + 1; j < circleData.size(); j++){
+            twoCircleSpots(nodes, circleData[i], circleData[j], n);
+        }
     }
-    noTurnRouteRisk(splitsData, start, end, circleData);
-    /*
-     * =====================
-     * END INPUT CIRCLE DATA
-     * =====================
-     */
-    /*
-     * ============================
-     * * DRAW CIRCLE RISK DATA ON MAP
-     * ============================
-     */
-    Point tempPoint = Point(floor(splitsData.back().x), floor(splitsData.back().y));
-    Point ans = findNextPoint(map, start, end, tempPoint, distLim, ratio, n, circleData);
-    cout <<"1 " << ans.x << " " << ans.y;
-
-    /*
-     * =================
-     * BELOW FOR TESTING
-     * drawing a n*n map
-     *    with risks
-     * =================
-     */
-    return 0;
-}
-
-ostream& operator<<(ostream& out, const Point& pt)
-{
-    out << pt.risk;
-    return out;
-}
+    for(int i = 0; i < nodes.size(); i++){
+        nodes[i].distStart = nodes[i].distToPoint(start);
+        cout << nodes[i].x << "　" << nodes[i].y << " " << nodes[i].distStart << endl;
+    }
+    stable_sort(nodes.begin(), nodes.end(),[]
+            (const Point& a, const Point& b) -> bool{return a.distStart < b.distStart;});
+};
 
 double calPointDist(double x1, double y1, double x2, double y2)
 {
@@ -159,11 +111,36 @@ double calPointRisk(double x, double y, double riskPointX, double riskPointY, do
     return risk;
 }
 
-/*
- * SplitsData: contain all the midpoints without a turn, and is ordered with risk
- * TurnData: a vector that contain the turn points
- * circleData: contain all the circles
- */
+void twoCircleSpots(vector<Point>& nodes, const Circle& c1, const Circle& c2, int n){
+    Point temp1, temp2;
+    double centerDist = calPointDist(c1.x, c1.y, c2.x, c2.y);
+    if(centerDist == c1.range + c2.range){
+        temp1.x = round(c1.x + (c2.x - c1.x) * c1.range / centerDist);
+        temp1.y = round(c1.y + (c2.y - c1.y) * c1.range / centerDist);
+        nodes.push_back(temp1);
+    }else if(centerDist < c1.range + c2.range && c1.range + centerDist > c2.range
+    && c2.range + centerDist > c1.range && centerDist != 0){
+        double onePart = 0, high = 0;
+        onePart = (pow(centerDist, 2) - pow(c2.range, 2) + pow(c1.range, 2)) / (2 * centerDist);
+        high = sqrt(pow(c1.range, 2) - pow(onePart, 2));
+
+        Point midPoint = Point(c1.x + (c2.x - c1.x) * onePart / centerDist,
+                               c1.y + (c2.y - c1.y) * onePart / centerDist);
+        double tempx = c1.y - c2.y;
+        double tempy = c2.x - c1.x;
+        double weight = high / sqrt(pow(tempx, 2) + pow(tempy, 2));
+        temp1.x = round(midPoint.x + tempx * weight);
+        temp1.y = round(midPoint.y + tempy * weight);
+        temp2.x = round(midPoint.x - tempx * weight);
+        temp2.y = round(midPoint.y - tempy * weight);
+        if(temp1.x >= 0 && temp1.x <= n && temp1.y >= 0 && temp1.y <= n){
+            nodes.push_back(temp1);
+        }
+        if(temp2.x >= 0 && temp2.x <= n && temp2.y >= 0 && temp2.y <= n){
+            nodes.push_back(temp2);
+        }
+    }
+}
 double noTurnRouteRisk(vector<Point>& splitsData, const Point& start,
                        const Point& end, const vector<Circle>& circleData){
     double dist = calPointDist(start.x, start.y, end.x, end.y);
@@ -180,7 +157,9 @@ double noTurnRouteRisk(vector<Point>& splitsData, const Point& start,
         Point temp = Point(start.x + progress * (end.x - start.x) / dist,
                            start.y + progress * (end.y - start.y) / dist);
         for(int i = 0; i < circleData.size(); i++){
-            temp.risk += circleData[i].givePointRisk(temp);
+            double r = calPointRisk(temp.x, temp.y,
+                    circleData[i].x, circleData[i].y, circleData[i].power, circleData[i].range);
+            temp.risk += r;
         }
         splitsData.emplace_back(temp);
         totalRisk += temp.risk;
@@ -250,7 +229,8 @@ double turnRouteRisk(const vector<Point>& turnData, const Point& start,
                     progress += 1;
                 }
                 for(int j = 0; j < circleData.size(); j++){
-                    temp.risk += circleData[j].givePointRisk(temp);
+                    temp.risk += calPointRisk(temp.x, temp.y, circleData[i].x, circleData[i].y,
+                            circleData[i].power, circleData[i].range);
                 }
                 totalRisk += temp.risk;
                 splits -= 1;
@@ -261,62 +241,4 @@ double turnRouteRisk(const vector<Point>& turnData, const Point& start,
         }
     }
     return totalRisk;
-}
-
-Point findNextPoint(bool map[][1000] , const Point& start, const Point& end, Point nowPt,
-                    double distLim,int ratio, int n, const vector<Circle> &circleData)
-{
-    Point bestPoint(nowPt);
-    vector<Point>targetData;
-    targetData.emplace_back(bestPoint);
-    vector<Point>turnData;
-
-    double xFrom, xTo, yFrom, yTo;
-    if(nowPt.x - floor(nowPt.x) == 0 && nowPt.y - floor(nowPt.y) == 0){
-        xFrom = static_cast<int>(nowPt.x / ratio) * ratio;
-        yFrom = static_cast<int>(nowPt.x / ratio) * ratio;
-        xTo = xFrom + ratio;
-        yTo = yFrom + ratio;
-    }else{
-        xFrom = static_cast<int>(nowPt.x / ratio) * ratio - ratio;
-        yFrom = static_cast<int>(nowPt.x / ratio) * ratio - ratio;
-        xTo = xFrom + 2 * ratio;
-        yTo = yFrom + 2 * ratio;
-    }
-    for(int i = (int)xFrom; i <= (int)xTo; i += ratio){
-        int tempx = 0, tempy = 0;
-        if (i < 0){
-            tempx = 0;
-        } else if (i > n){
-            tempx = n;
-        }else{
-            tempx = i;
-        }
-        for(int j = (int)yFrom; j <= (int)yTo; j += ratio){
-            if (j < 0){
-                tempy = 0;
-            } else if (j > n){
-                tempy = n;
-            }else{
-                tempy = j;
-            }
-            if(!map[tempx][tempy]){
-                map[tempx][tempy] = true;
-                turnData.clear();
-                turnData.emplace_back(Point(tempx, tempy));
-                double risk = turnRouteRisk(turnData, start, end, circleData);
-                // judge
-                if (risk < turnRouteRisk(targetData, start, end, circleData) &&
-                    calPointDist(start.x, start.y, tempx, tempy) + calPointDist(tempx, tempy, end.x, end.y) <= distLim &&
-                    tempx - start.x / tempy - start.y != end.x - tempx / end.y - tempy){
-                    bestPoint = Point(tempx, tempy);
-                }
-            }
-        }
-    }
-    if(bestPoint.x == nowPt.x && bestPoint.y == nowPt.y){
-        return bestPoint;
-    }else{
-        return findNextPoint(map, start, end, bestPoint, distLim, ratio, n, circleData);
-    }
 }
