@@ -28,12 +28,13 @@ public:
     double x;
     double y;
     double risk;
+    double distStart;
     Point();
     Point(double x, double y);
     double distToPoint(const Point& aPoint);
 };
-Point::Point() : x(0), y(0), risk(0){}
-Point::Point(double x, double y) : x(x), y(y), risk(0){}
+Point::Point() : x(0), y(0), risk(0), distStart(0){}
+Point::Point(double x, double y) : x(x), y(y), risk(0), distStart(0){}
 double Point::distToPoint(const Point& aPoint)
 {
     return calPointDist(aPoint.x, aPoint.y, x, y);
@@ -54,8 +55,10 @@ double calPointRisk(double x, double y, double riskPointX, double riskPointY, do
 }
 
 Point findVoronoiPoint(Circle, Circle, Circle, int);
-void findTriangles(vector<Point>& nodes, vector<Circle>& circleData, int);
-void twoCircleSpots(vector<Point>& nodes, const Circle& c1, const Circle& c2, int n, Point& base);
+void findTriangles(vector<Point>& nodes, vector<Circle>& circleData, int, Point&);
+//void twoCircleSpots(vector<Point>& nodes, const Circle& c1, const Circle& c2, int n, Point& base);
+double turnRouteRisk(const vector<Point>& turnData, const Point& start,
+                     const Point& end, const vector<Circle> &circleData);
 
 
 int main() {
@@ -97,51 +100,16 @@ int main() {
     stable_sort(circleData.begin(), circleData.end(),[]
             (const Circle& a, const Circle& b) -> bool{return a.distStart < b.distStart;});
     vector<Point> nodes;
-    twoCircleSpots(nodes, circleData[0], circleData[1], n, start);
-    findTriangles(nodes, circleData, n);
+//    twoCircleSpots(nodes, circleData[0], circleData[1], n, start);
+    findTriangles(nodes, circleData, n, start);
+    stable_sort(nodes.begin(), nodes.end(),[]
+            (const Point& a, const Point& b) -> bool{return a.distStart < b.distStart;});
     for(int i = 0; i < nodes.size(); i++){
-        cout << nodes[i].x << " " << nodes[i].y << endl;
+        cout << nodes[i].x << " " << nodes[i].y << " "<< nodes[i].distStart << endl;
     }
 }
 
-void twoCircleSpots(vector<Point>& nodes, const Circle& c1, const Circle& c2, int n, Point& base){
-    Point temp1, temp2;
-    double centerDist = calPointDist(c1.x, c1.y, c2.x, c2.y);
-    if(centerDist == c1.range + c2.range){
-        temp1.x = round(c1.x + (c2.x - c1.x) * c1.range / centerDist);
-        temp1.y = round(c1.y + (c2.y - c1.y) * c1.range / centerDist);
-        nodes.push_back(temp1);
-    }else if(centerDist < c1.range + c2.range && c1.range + centerDist > c2.range
-             && c2.range + centerDist > c1.range && centerDist != 0){
-        double onePart = 0, high = 0;
-        onePart = (pow(centerDist, 2) - pow(c2.range, 2) + pow(c1.range, 2)) / (2 * centerDist);
-        high = sqrt(pow(c1.range, 2) - pow(onePart, 2));
-        Point midPoint = Point(c1.x + (c2.x - c1.x) * onePart / centerDist,
-                               c1.y + (c2.y - c1.y) * onePart / centerDist);
-        double tempx = c1.y - c2.y;
-        double tempy = c2.x - c1.x;
-        double weight = high / sqrt(pow(tempx, 2) + pow(tempy, 2));
-        temp1.x = round(midPoint.x + tempx * weight);
-        temp1.y = round(midPoint.y + tempy * weight);
-        temp2.x = round(midPoint.x - tempx * weight);
-        temp2.y = round(midPoint.y - tempy * weight);
-
-        double dist1 = temp1.distToPoint(base);
-        double dist2 = temp2.distToPoint(base);
-        Point temp;
-        if(dist1 >= dist2){
-            temp = Point(temp2);
-        }else{
-            temp = Point(temp1);
-        }
-
-        if(temp.x >= 0 && temp.x <= n && temp.y >= 0 && temp.y <= n){
-            nodes.push_back(temp);
-        }
-    }
-}
-
-void findTriangles(vector<Point>& nodes, vector<Circle>& circleData, int n){
+void findTriangles(vector<Point>& nodes, vector<Circle>& circleData, int n, Point& start){
     for(int i = 2; i < circleData.size(); i++){
         double minDist1 = -1, minDist2 = -1;
         int minDistCircle1 = 0, minDistCircle2 = 0;
@@ -171,6 +139,7 @@ void findTriangles(vector<Point>& nodes, vector<Circle>& circleData, int n){
         if(minDist1 != -1 && minDist2 != -1){
             temp = findVoronoiPoint(circleData[i],
                     circleData[minDistCircle1], circleData[minDistCircle2], n);
+            temp.distStart = temp.distToPoint(start);
             nodes.push_back(temp);
         }
         cout << circleData[i].x << " " << circleData[i].y << endl;
@@ -180,6 +149,79 @@ void findTriangles(vector<Point>& nodes, vector<Circle>& circleData, int n){
         cout << endl;
     }
 }
+
+double turnRouteRisk(const vector<Point>& turnData, const Point& start,
+                     const Point& end, const vector<Circle>& circleData){
+    vector<double> distData;
+    double distTemp = 0;
+    for(int i = 0; i <= turnData.size(); i++){
+        if(i == 0){
+            distTemp = calPointDist(start.x, start.y, turnData[i].x, turnData[i].y);
+        }else if(i == turnData.size()){
+            distTemp = calPointDist(end.x, end.y, turnData[i - 1].x, turnData[i - 1].y);
+        }else{
+            distTemp = calPointDist(turnData[i - 1].x, turnData[i - 1].y, turnData[i].x, turnData[i].y);
+        }
+        distData.push_back(distTemp);
+    }
+
+    double dist = 0, splits = 0, totalRisk = 0, remainDist = 0;
+    double tempx = 0, tempy = 0;
+    int progress = 1;
+    bool justTurn = false;
+
+    for(int i = 0; i < distData.size(); i++){
+        dist += distData[i];
+    }
+    if(dist - floor(dist) == 0){
+        splits = floor(dist) - 1;
+    }else{
+        splits = floor(dist);
+    }
+
+    while(splits > 0){
+        for(int i = 0; i <= turnData.size(); i++){
+            while(remainDist + progress < distData[i]){
+                Point temp;
+                if(justTurn){
+                    if(i == turnData.size()){
+                        temp = Point(turnData[i - 1].x + (end.x - turnData[i - 1].x) * remainDist / distData[i],
+                                     turnData[i - 1].y + (end.y - turnData[i - 1].y) * remainDist / distData[i]);
+                    }else{
+                        temp = Point(turnData[i - 1].x + (turnData[i].x - turnData[i - 1].x) * remainDist / distData[i],
+                                     turnData[i - 1].y + (turnData[i].y - turnData[i - 1].y) * remainDist / distData[i]);
+                    }
+                    tempx = temp.x;
+                    tempy = temp.y;
+                    justTurn = false;
+                }else{
+                    if(i == 0){
+                        temp = Point(start.x + progress * (turnData[i].x - start.x) / distData[i],
+                                     start.y + progress * (turnData[i].y - start.y) / distData[i]);
+                    }else if(i == turnData.size()){
+                        temp = Point(tempx + progress * (end.x - turnData[i - 1].x) / distData[i],
+                                     tempy + progress * (end.y - turnData[i - 1].y) / distData[i]);
+                    }else{
+                        temp = Point(tempx + progress * (turnData[i].x - turnData[i - 1].x) / distData[i],
+                                     tempy + progress * (turnData[i].y - turnData[i - 1].y) / distData[i]);
+                    }
+                    progress += 1;
+                }
+                for(int j = 0; j < circleData.size(); j++){
+                    temp.risk +=  calPointRisk(temp.x, temp.y, circleData[j].x, circleData[j].y,
+                                               circleData[j].power, circleData[j].range);
+                }
+                totalRisk += temp.risk;
+                splits -= 1;
+            }
+            remainDist = progress + remainDist - distData[i];
+            progress = 1;
+            justTurn = true;
+        }
+    }
+    return totalRisk;
+}
+
 
 Point findVoronoiPoint(Circle c1, Circle c2, Circle c3, int n){
     double temp[3][3] = {0};
@@ -233,3 +275,43 @@ Point findVoronoiPoint(Circle c1, Circle c2, Circle c3, int n){
     Point tempP = Point(x, y);
     return tempP;
 }
+
+
+//void twoCircleSpots(vector<Point>& nodes, const Circle& c1, const Circle& c2, int n, Point& base){
+//    Point temp1, temp2;
+//    double centerDist = calPointDist(c1.x, c1.y, c2.x, c2.y);
+//    if(centerDist == c1.range + c2.range){
+//        temp1.x = round(c1.x + (c2.x - c1.x) * c1.range / centerDist);
+//        temp1.y = round(c1.y + (c2.y - c1.y) * c1.range / centerDist);
+//        nodes.push_back(temp1);
+//    }else if(centerDist < c1.range + c2.range && c1.range + centerDist > c2.range
+//             && c2.range + centerDist > c1.range && centerDist != 0){
+//        double onePart = 0, high = 0;
+//        onePart = (pow(centerDist, 2) - pow(c2.range, 2) + pow(c1.range, 2)) / (2 * centerDist);
+//        high = sqrt(pow(c1.range, 2) - pow(onePart, 2));
+//        Point midPoint = Point(c1.x + (c2.x - c1.x) * onePart / centerDist,
+//                               c1.y + (c2.y - c1.y) * onePart / centerDist);
+//        double tempx = c1.y - c2.y;
+//        double tempy = c2.x - c1.x;
+//        double weight = high / sqrt(pow(tempx, 2) + pow(tempy, 2));
+//        temp1.x = round(midPoint.x + tempx * weight);
+//        temp1.y = round(midPoint.y + tempy * weight);
+//        temp2.x = round(midPoint.x - tempx * weight);
+//        temp2.y = round(midPoint.y - tempy * weight);
+//
+//        double dist1 = temp1.distToPoint(base);
+//        double dist2 = temp2.distToPoint(base);
+//        Point temp;
+//        if(dist1 >= dist2){
+//            temp = Point(temp2);
+//            temp.distStart = dist2;
+//        }else{
+//            temp = Point(temp1);
+//            temp.distStart = dist1;
+//        }
+//
+//        if(temp.x >= 0 && temp.x <= n && temp.y >= 0 && temp.y <= n){
+//            nodes.push_back(temp);
+//        }
+//    }
+//}
