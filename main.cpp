@@ -3,7 +3,6 @@
 #include <vector>
 #include <algorithm>
 #include <climits>
-#include <time.h>
 using namespace std;
 
 double calPointDist(double x1, double y1, double x2, double y2)
@@ -27,13 +26,12 @@ public:
     double y;
     double range;
     double power;
-    double distStart;
     Circle();
     Circle(double x, double y, double range, double power);
 };
-Circle::Circle() : x(0), y(0), range(0), power(0), distStart(0){}
+Circle::Circle() : x(0), y(0), range(0), power(0) {}
 Circle::Circle(double x, double y, double range, double power)
-        : x(x), y(y), range(range), power(power), distStart(0){}
+        : x(x), y(y), range(range), power(power) {}
 
 class Point
 {
@@ -41,31 +39,26 @@ public:
     double x;
     double y;
     double risk;
-    double distStart;
+    Circle close;
     Point();
     Point(double x, double y);
     double distToPoint(const Point& aPoint);
 };
-Point::Point() : x(0), y(0), risk(0), distStart(0){}
-Point::Point(double x, double y) : x(x), y(y), risk(0), distStart(0){}
+Point::Point() : x(0), y(0), risk(0), close(Circle(0,0,0,0)){}
+Point::Point(double x, double y) : x(x), y(y), risk(0), close(Circle(0,0,0,0)){}
 double Point::distToPoint(const Point& aPoint)
 {
     return calPointDist(aPoint.x, aPoint.y, x, y);
 }
 
-
-Point findVoronoiPoint(Circle, Circle, Circle, int);
-void findTriangles(vector<Point>& nodes, vector<Circle>& circleData, int, Point&);
-//void twoCircleSpots(vector<Point>& nodes, const Circle& c1, const Circle& c2, int n, Point& base);
-double noTurnRouteRisk(const Point& start, const Point& end, const vector<Circle>& circleData);
-
-void findBest(int n, int m, vector<int>& turnPoint, double** nodeRisk, vector<Point>& nodes,
-              Point& start, Point& end, double weight, double distLim, double& minCost
-              , vector<Circle>& circleData);
+double noTurnRouteRisk(vector<Point>& splitsData, const Point& start,
+                       const Point& end, const vector<Circle>& circleData);
+double turnRouteRisk(const vector<Point>& turnData, const Point& start,
+                     const Point& end, const vector<Circle> &circleData);
+void dodgeRisk(vector<Point>& turnsData, vector<Point>& splitsData, const Point& start,
+               const Point& end, const vector<Circle>& circleData, int weight, double lineRisk, int distLim);
 
 int main() {
-//    clock_t t;
-//    t = clock();
     int n = 0, m = 0, weight = 0, distLim = 0;
     cin >> n >> m >> weight >> distLim;
 
@@ -73,7 +66,6 @@ int main() {
     vector<int> yData;
     vector<int> rangeData;
     vector<int> powerData;
-    vector<Circle> circleDataTemp;
     vector<Circle> circleData;
     int temp = 0;
     for (int i = 0; i < m; ++i) {
@@ -92,71 +84,87 @@ int main() {
         cin >> temp;
         powerData.push_back(temp);
     }
+    for (int i = 0; i < m; ++i) {
+        circleData.emplace_back(Circle(xData[i], yData[i], rangeData[i], powerData[i]));
+    }
+
     double x1, y1, x2, y2;
     cin >> x1 >> y1 >> x2 >> y2;
     Point start = Point(x1, y1);
     Point end = Point(x2, y2);
-
-    for (int i = 0; i < m; ++i) {
-        Circle tempCircle = Circle(xData[i], yData[i], rangeData[i], powerData[i]);
-        tempCircle.distStart = calPointDist(tempCircle.x, tempCircle.y, start.x, start.y);
-        circleDataTemp.emplace_back(tempCircle);
-    }
-    stable_sort(circleDataTemp.begin(), circleDataTemp.end(),[]
-            (const Circle& a, const Circle& b) -> bool{return a.range > b.range;});
-    for(int i = 0; i < 30; i++){
-        circleData.push_back(circleDataTemp[i]);
-    }
-    vector<Point> nodes;
-//    twoCircleSpots(nodes, circleData[0], circleData[1], n, start);
-    findTriangles(nodes, circleData, n, start);
-    stable_sort(nodes.begin(), nodes.end(),[]
-            (const Point& a, const Point& b) -> bool{return a.distStart < b.distStart;});
-
-    /*
-     * nodes founded
-     */
-    double** riskNodes = new double* [nodes.size()];
-    for(int i = 0; i < nodes.size(); i++){
-        double risk;
-        riskNodes[i] = new double [nodes.size()];
-        for(int j = 0; j <= i; j++){
-            risk = noTurnRouteRisk(nodes[i], nodes[j], circleData);
-            riskNodes[j][i] = risk;
-            riskNodes[i][j] = risk;
-            if(j == i){
-                riskNodes[i][j] = 0;
-            }
-        }
-    }
-//    for(int i = 0; i < nodes.size(); i++){
-//        cout << nodes[i].x << " " << nodes[i].y << " "<< nodes[i].distStart << endl;
+    vector<Point> splitsData;
+    vector<Point> turnsData;
+    double lineRisk = noTurnRouteRisk(splitsData, start, end, circleData);
+//    cout << lineRisk << endl;
+//    for(int i = 0; i < splitsData.size(); i++){
+//        cout << splitsData[i].x << " " << splitsData[i].y << " -- " << splitsData[i].close.x <<" " << splitsData[i].close.y << endl;
 //    }
-//    for(int i = 0; i < nodes.size(); i++){
-//        for(int j = 0; j < nodes.size() - 1; j ++){
-//            cout << riskNodes[i][j] << " ";
-//        }
-//        cout << riskNodes[i][nodes.size() - 1] << endl;
-//    }
-
-    vector<int> turnPoint;
-    double minCost = INT_MAX;
-
-    for(int i = 0; i < 2; i++){
-        findBest(i + 1, nodes.size(), turnPoint, riskNodes, nodes, start, end,
-                 weight, distLim, minCost, circleData);
+    dodgeRisk(turnsData, splitsData, start, end, circleData, weight, lineRisk, distLim);
+    cout << turnsData.size();
+    for(int i = 0; i < turnsData.size(); i++){
+        cout << " " << round(turnsData[i].x) << " " << round(turnsData[i].y);
     }
-    cout << turnPoint.size() << " ";
-    for (int i = 0; i < turnPoint.size() - 1; ++i) {
-        cout << nodes[turnPoint[i]].x <<" "<< nodes[turnPoint[i]].y << " ";
-    }
-    cout << nodes[turnPoint.back()].x <<" "<< nodes[turnPoint.back()].y;
-//    t = clock() - t;
-//    cout << (float)t/CLOCKS_PER_SEC << endl;
-
 }
 
-double noTurnRouteRisk(const Point& start, const Point& end, const vector<Circle>& circleData){
+void dodgeRisk(vector<Point>& turnsData, vector<Point>& splitsData, const Point& start,
+               const Point& end, const vector<Circle>& circleData, int weight, double lineRisk, int distLim){
+    vector<Point> nowTurnsData;
+    int index = 0;
+    double nowCost = 0;
+    double toX = 0, toY = 0, dist = 0;
+    Point high = splitsData.back();
+    high.close = splitsData.back().close;
+
+    if((high.x - high.close.x) / (high.y - high.close.y) != (high.x - end.x) / (high.y - end.y)){
+        dist = sqrt(pow(high.x - high.close.x, 2) + pow(high.y - high.close.y, 2));
+        toX = 20 * (high.x - high.close.x) / dist;
+        toY = 20 * (high.y - high.close.y) / dist;
+    }else{
+        dist = sqrt(pow(end.x - high.close.x, 2) + pow(end.y - high.close.y, 2));
+        toX = 20 * (high.close.y - end.y) / dist;
+        toY = 20 * (end.x - high.close.x) / dist;
+    }
+    double distTurn;
+    do{
+        high.x += toX;
+        high.y += toY;
+        turnsData.clear();
+        for(int i = 0; i < nowTurnsData.size(); i++){
+            turnsData.push_back(nowTurnsData[i]);
+        }
+        nowTurnsData.clear();
+        nowTurnsData.push_back(high);
+        distTurn = nowTurnsData[0].distToPoint(start) + nowTurnsData[0].distToPoint(end);
+        double risk = turnRouteRisk(nowTurnsData, start, end, circleData);
+        nowCost = weight * nowTurnsData.size() + risk;
+        index++;
+    }while(nowCost <= lineRisk &&
+            distTurn < distLim);
+
+    high.x -= toX;
+    high.y -= toY;
+
+    if(index == 1){
+        do{
+            high.x -= toX;
+            high.y -= toY;
+            turnsData.clear();
+            for(int i = 0; i < nowTurnsData.size(); i++){
+                turnsData.push_back(nowTurnsData[i]);
+            }
+            nowTurnsData.clear();
+            nowTurnsData.push_back(high);
+            distTurn = nowTurnsData[0].distToPoint(start) + nowTurnsData[0].distToPoint(end);
+            double risk = turnRouteRisk(nowTurnsData, start, end, circleData);
+            nowCost = weight * nowTurnsData.size() + risk;
+            index++;
+        }while(nowCost <= lineRisk &&
+                distTurn < distLim);
+    }
+}
+
+double noTurnRouteRisk(vector<Point>& splitsData, const Point& start,
+                       const Point& end, const vector<Circle>& circleData){
     double dist = calPointDist(start.x, start.y, end.x, end.y);
     double splits = 0, totalRisk = 0;
     int progress = 1;
@@ -170,171 +178,94 @@ double noTurnRouteRisk(const Point& start, const Point& end, const vector<Circle
     while(splits > 0){
         Point temp = Point(start.x + progress * (end.x - start.x) / dist,
                            start.y + progress * (end.y - start.y) / dist);
+        double maxRisk = 0, risk = 0;
         for(int i = 0; i < circleData.size(); i++){
-            temp.risk += calPointRisk(temp.x, temp.y, circleData[i].x, circleData[i].y,
-                                      circleData[i].power, circleData[i].range);
+            double r = calPointRisk(temp.x, temp.y,
+                    circleData[i].x, circleData[i].y, circleData[i].power, circleData[i].range);
+            if(r > maxRisk){
+                temp.close = circleData[i];
+            }
+            temp.risk += r;
+            risk += r;
         }
-        totalRisk += temp.risk;
+        splitsData.emplace_back(temp);
+        totalRisk += risk;
         progress += 1;
         splits -= 1;
     }
+    stable_sort(splitsData.begin(), splitsData.end(),[]
+            (const Point& a, const Point& b) -> bool{return a.risk < b.risk;});
     return totalRisk;
 }
 
-void findTriangles(vector<Point>& nodes, vector<Circle>& circleData, int n, Point& start){
-    for(int i = 2; i < circleData.size(); i++){
-        double minDist1 = -1, minDist2 = -1;
-        int minDistCircle1 = 0, minDistCircle2 = 0;
-        double dist;
-        for(int j = 0; j < i; j++){
-            dist = calPointDist(circleData[i].x, circleData[i].y, circleData[j].x, circleData[j].y);
-            if(minDist1 == -1){
-                minDist1 = dist;
-                minDistCircle1 = j;
-            }else if(dist < minDist1) {
-                minDistCircle2 = minDistCircle1;
-                minDistCircle1 = j;
-                minDist2 = minDist1;
-                minDist1 = dist;
-            }else{
-                if(dist < minDist2 || minDist2 == -1) {
-                    if ((circleData[minDistCircle1].x - circleData[i].x) /
-                        (circleData[minDistCircle1].y - circleData[i].y)
-                        != (circleData[j].x - circleData[i].x) / (circleData[j].y - circleData[i].y)) {
-                        minDistCircle2 = j;
-                        minDist2 = dist;
-                    }
-                }
-            }
+double turnRouteRisk(const vector<Point>& turnData, const Point& start,
+                     const Point& end, const vector<Circle>& circleData){
+    vector<double> distData;
+    double distTemp = 0, dist = 0;
+    for(int i = 0; i <= turnData.size(); i++){
+        if(i == 0){
+            distTemp = calPointDist(start.x, start.y, turnData[i].x, turnData[i].y);
+        }else if(i == turnData.size()){
+            distTemp = calPointDist(end.x, end.y, turnData[i - 1].x, turnData[i - 1].y);
+        }else{
+            distTemp = calPointDist(turnData[i - 1].x, turnData[i - 1].y, turnData[i].x, turnData[i].y);
         }
-        Point temp;
-        if(minDist1 != -1 && minDist2 != -1){
-            temp = findVoronoiPoint(circleData[i],
-                                    circleData[minDistCircle1], circleData[minDistCircle2], n);
-            temp.distStart = temp.distToPoint(start);
-            nodes.push_back(temp);
-        }
-        //cout << circleData[i].x << " " << circleData[i].y << endl;
-        //cout << circleData[minDistCircle1].x << " " << circleData[minDistCircle1].y << endl;
-        //cout << circleData[minDistCircle2].x << " " << circleData[minDistCircle2].y << endl;
-        //cout << temp.x << " " << temp.y << endl;
-        //cout << endl;
+        distData.push_back(distTemp);
+        dist += distTemp;
+
     }
-}
 
-Point findVoronoiPoint(Circle c1, Circle c2, Circle c3, int n){
-    double temp[3][3] = {0};
-    temp[0][0] = c2.x - c1.x;
-    temp[0][1] = c2.y - c1.y;
-    temp[1][0] = c3.x - c2.x;
-    temp[1][1] = c3.y - c2.y;
-    temp[2][0] = c1.x - c3.x;
-    temp[2][1] = c1.y - c3.y;
+    double splits = 0, totalRisk = 0, risk = 0, remainDist = 0;
+    double tempx = 0, tempy = 0;
+    int progress = 1;
+    bool justTurn = false;
 
-    Point mid1 = Point(c1.x + (c2.x - c1.x) * c1.power / (c1.power + c2.power),
-                       c1.y + (c2.y - c1.y) * c1.power / (c1.power + c2.power));
-    Point mid2 = Point(c2.x + (c3.x - c2.x) * c2.power / (c3.power + c2.power),
-                       c2.y + (c3.y - c2.y) * c2.power / (c3.power + c2.power));
-    Point mid3 = Point(c3.x + (c1.x - c3.x) * c3.power / (c3.power + c1.power),
-                       c3.y + (c1.y - c3.y) * c3.power / (c3.power + c1.power));
-    temp[0][2] = temp[0][0] * mid1.x + temp[0][1] * mid1.y;
-    temp[1][2] = temp[1][0] * mid2.x + temp[1][1] * mid2.y;
-    temp[2][2] = temp[2][0] * mid3.x + temp[2][1] * mid3.y;
-
-    double weight, y ,x;
-    if(temp[0][0] != 0){
-        weight = 0 - temp[1][0] / temp[0][0];
-        y = round((weight * temp[0][2] + temp[1][2]) / (weight * temp[0][1] + temp[1][1]));
-        x = round((temp[0][2] - temp[0][1] * y) / temp[0][0]);
+    if(dist - floor(dist) == 0){
+        splits = floor(dist) - 1;
     }else{
-        weight = 0 - temp[1][1] / temp[0][1];
-        x = round((weight * temp[0][2] + temp[1][2]) / (weight * temp[0][0] + temp[1][0]));
-        y = round((temp[0][2] - temp[0][0] * x) / temp[0][1]);
-    }
-//    cout << mid1.x << " " << mid1.y << endl;
-//    cout << mid2.x << " " << mid2.y << endl;
-//    cout << mid3.x << " " << mid3.y << endl;
-//    for(int i = 0; i < 3; i++){
-//        for(int j = 0; j < 2; j++){
-//            cout << temp[i][j] << " ";
-//        }
-//        cout << temp[i][2] << endl;
-//    }
-    if(y < 0){
-        y = 0;
-    }else if(y > n){
-        y = n;
+        splits = floor(dist);
     }
 
-    if(x < 0){
-        x = 0;
-    }else if(x > n){
-        x = n;
-    }
-    Point tempP = Point(x, y);
-    return tempP;
-}
-
-void findBest(int n,int m, vector<int>& turnPoint, double** nodeRisk,  vector<Point>& nodes,
-        Point& start, Point& end, double weight, double distLim, double& minCost, vector<Circle>& circleData)
-{
-    vector<int> list;
-    for(int i=0;i<n;++i) {
-        list.push_back(i);
-    }
-    --list[n-1];
-
-
-    vector<Point> nowTurnPoint;
-    do{
-        for(int i=n-1;i>=0;--i)
-        {
-            if(list[i]<m+i-n)
-            {
-                ++list[i];
-                for(int j=i+1;j<n;++j)
-                {
-                    list[j]=list[i]+j-i;
+    while(splits > 0){
+        for(int i = 0; i <= turnData.size(); i++){
+            while(remainDist + progress < distData[i]){
+                Point temp;
+                risk = 0;
+                if(justTurn){
+                    if(i == turnData.size()){
+                        temp = Point(turnData[i - 1].x + (end.x - turnData[i - 1].x) * remainDist / distData[i],
+                                     turnData[i - 1].y + (end.y - turnData[i - 1].y) * remainDist / distData[i]);
+                    }else{
+                        temp = Point(turnData[i - 1].x + (turnData[i].x - turnData[i - 1].x) * remainDist / distData[i],
+                                     turnData[i - 1].y + (turnData[i].y - turnData[i - 1].y) * remainDist / distData[i]);
+                    }
+                    tempx = temp.x;
+                    tempy = temp.y;
+                    justTurn = false;
+                }else{
+                    if(i == 0){
+                        temp = Point(start.x + progress * (turnData[i].x - start.x) / distData[i],
+                                     start.y + progress * (turnData[i].y - start.y) / distData[i]);
+                    }else if(i == turnData.size()){
+                        temp = Point(tempx + progress * (end.x - turnData[i - 1].x) / distData[i],
+                                     tempy + progress * (end.y - turnData[i - 1].y) / distData[i]);
+                    }else{
+                        temp = Point(tempx + progress * (turnData[i].x - turnData[i - 1].x) / distData[i],
+                                     tempy + progress * (turnData[i].y - turnData[i - 1].y) / distData[i]);
+                    }
+                    progress += 1;
                 }
-                break;
-            }
-        }
-//         cout << "now route : ";
-//        for (int k = 0; k < list.size(); ++k) {
-//            cout <<list[k] << " ";
-//        }
-//         cout << endl;
-//         index 0, 1, 2,......n - 1是我們要的點的index
-        double dist = calPointDist(start.x, start.y, nodes[list[0]].x, nodes[list[0]].y)
-                      + calPointDist(start.x, start.y, nodes[list.back()].x, nodes[list.back()].y);
-        nowTurnPoint.clear();
-        for (int index : list){
-            if(!nowTurnPoint.empty()){
-                dist += calPointDist(nowTurnPoint.back().x, nowTurnPoint.back().y,
-                                     nodes[index].x, nodes[index].y);
-            }
-            nowTurnPoint.push_back(nodes[index]);
-        }
-        if(dist < distLim){
-            double nowCost = 0;
-            if(nowTurnPoint.size() > 1){
-                for(int i = 1; i < nowTurnPoint.size(); i++){
-                    nowCost += nodeRisk[list[i - 1]][list[i]];
+                for(int j = 0; j < circleData.size(); j++){
+                    risk += calPointRisk(temp.x, temp.y, circleData[j].x, circleData[j].y,
+                            circleData[j].power, circleData[j].range);
                 }
+                totalRisk += risk;
+                splits -= 1;
             }
-            nowCost += noTurnRouteRisk(start, nowTurnPoint[0], circleData);
-            nowCost += noTurnRouteRisk(end, nowTurnPoint.back(), circleData);
-            nowCost += weight * turnPoint.size();
-            cout << "Compare NowCost " << nowCost << " with minCost " << minCost << endl;
-            if (nowCost < minCost){
-                minCost = nowCost;
-                turnPoint.clear();
-                for (int j = 0; j < list.size(); ++j) {
-                    turnPoint.push_back(list[j]);
-                }
-                //cout << "Now minCost = " << minCost << endl;
-            }
-            cout << endl;
+            remainDist = progress + remainDist - distData[i];
+            progress = 1;
+            justTurn = true;
         }
-    }while(list[0]<(m-n));
+    }
+    return totalRisk;
 }
